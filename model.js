@@ -6,63 +6,109 @@
 
   var MONTHS = ['كانون الثاني', 'شباط', 'آذار', 'نيسان', 'أيار', 'حزيران', 'تموز', 'آب', 'أيلول', 'تشرين الأول', 'تشرين الثاني', 'كانون الأول'];
 
+  /* ---------- الأرقام: لاتينية أو عربية هندية ---------- */
+  var digitMode = 'latin';
+  var HD = '٠١٢٣٤٥٦٧٨٩';
+  function setDigits(m) { digitMode = m === 'hindi' ? 'hindi' : 'latin'; }
+  function getDigits() { return digitMode; }
+  function digits(s) {
+    s = String(s);
+    if (digitMode !== 'hindi') return s;
+    return s.replace(/(\d),(?=\d)/g, '$1٬').replace(/(\d)\.(?=\d)/g, '$1٫')
+      .replace(/[0-9]/g, function (d) { return HD.charAt(+d); });
+  }
+
   /* ---------- تنسيق ---------- */
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
   }
-  function fmt(n) {
+  function fmtPlain(n) {
     var r = Math.round(n);
     return (r < 0 ? '−' : '') + Math.abs(r).toLocaleString('en-US');
   }
-  function num(t) { return '<span class="num">' + t + '</span>'; }
-  function money(n) { return num(fmt(n)) + '<span class="unit"> د.ع</span>'; }
+  function fmt(n) { return digits(fmtPlain(n)); }
+  function num(t) { return '<span class="num">' + digits(t) + '</span>'; }
+  function money(n) { return num(fmtPlain(n)) + '<span class="unit"> د.ع</span>'; }
   function pct(n) { return num(Math.round(n) + '%'); }
   function fmtMonths(n) {
     n = Math.round(n);
-    if (n < 12) return n === 1 ? 'شهر واحد' : n === 2 ? 'شهرين' : n + (n <= 10 ? ' أشهر' : ' شهراً');
-    var y = Math.floor(n / 12), r = n % 12;
-    var ys = y === 1 ? 'سنة' : y === 2 ? 'سنتين' : y + (y <= 10 ? ' سنوات' : ' سنة');
-    return r ? ys + ' و' + (r === 1 ? 'شهر' : r === 2 ? 'شهرين' : r + (r <= 10 ? ' أشهر' : ' شهراً')) : ys;
+    var s;
+    if (n < 12) s = n === 1 ? 'شهر واحد' : n === 2 ? 'شهرين' : n + (n <= 10 ? ' أشهر' : ' شهراً');
+    else {
+      var y = Math.floor(n / 12), r = n % 12;
+      var ys = y === 1 ? 'سنة' : y === 2 ? 'سنتين' : y + (y <= 10 ? ' سنوات' : ' سنة');
+      s = r ? ys + ' و' + (r === 1 ? 'شهر' : r === 2 ? 'شهرين' : r + (r <= 10 ? ' أشهر' : ' شهراً')) : ys;
+    }
+    return digits(s);
   }
   function monthLabel(i) { return MONTHS[(new Date().getMonth() + i) % 12]; }
   function monthYear(i) {
     var d = new Date(), idx = d.getMonth() + i;
-    return MONTHS[idx % 12] + ' ' + (d.getFullYear() + Math.floor(idx / 12));
+    return MONTHS[idx % 12] + ' ' + digits(d.getFullYear() + Math.floor(idx / 12));
   }
+  function clamp(v, lo, hi) { v = +v; if (isNaN(v)) v = 0; return Math.min(hi, Math.max(lo, v)); }
 
-  /* ---------- الحساب ---------- */
-  /* g: تغيير المصروفات المتغيرة %، gOb: تغيير الالتزامات الثابتة % */
-  function effAmount(it, g, gOb) {
-    return it.kind === 'ex' ? it.amount * (1 + g / 100) : it.amount * (1 + (gOb || 0) / 100);
+  /* ---------- البنود: شهري، سنوي (يوزع على 12 شهراً)، مرة واحدة في شهر محدد ---------- */
+  function itemBase(it, m) {
+    var s = it.sched || 'm';
+    if (s === 'y') return it.amount / 12;
+    if (s === 'o') return m === (it.month | 0) ? it.amount : 0;
+    return it.amount;
   }
-
-  function totals(state, g, gOb) {
+  function inflF(state, m) {
+    var r = +state.inflation || 0;
+    return r > 0 ? Math.pow(1 + r / 100, m / 12) : 1;
+  }
+  function itemAt(state, it, m, g, gOb) {
+    return itemBase(it, m) * (1 + (it.kind === 'ex' ? g : (gOb || 0)) / 100) * inflF(state, m);
+  }
+  function itemAvg(state, it, g, gOb) {
+    var s = 0;
+    for (var m = 0; m < 12; m++) s += itemAt(state, it, m, g, gOb);
+    return s / 12;
+  }
+  function monthTotals(state, m, g, gOb) {
     var ob = 0, ex = 0;
-    state.items.forEach(function (it) { if (it.kind === 'ex') ex += effAmount(it, g, gOb); else ob += effAmount(it, g, gOb); });
+    state.items.forEach(function (it) { var v = itemAt(state, it, m, g, gOb); if (it.kind === 'ex') ex += v; else ob += v; });
     return { ob: ob, ex: ex };
   }
-
-  /* دخل الشهر رقم m (0 = الشهر الحالي). عند تفعيل الدخل المتغير تُقرأ قيم الأشهر. */
-  function incomeAt(state, m) {
-    if (state.varIncome) {
-      var v = +(state.incomeMonths || [])[m];
-      return isNaN(v) ? state.salary + state.other : Math.max(0, v);
-    }
-    return state.salary + state.other;
+  function totals(state, g, gOb) {
+    var ob = 0, ex = 0;
+    for (var m = 0; m < 12; m++) { var t = monthTotals(state, m, g, gOb); ob += t.ob; ex += t.ex; }
+    return { ob: ob / 12, ex: ex / 12 };
   }
 
-  /* محاكاة 12 شهراً. المعاملات p:
-       gEx تغيير المصروفات المتغيرة %، gOb تغيير الالتزامات %، goal هدف الادخار الشهري،
-       incExtra دخل إضافي شهري، extraDebt دفعة إضافية شهرية للدين الأعلى فائدة.
-     الدين يحمل فائدة شهرية، والادخار = الأقل من الهدف والفائض. ما يزيد عن الهدف فائض حر.
-     والعجز يُسحب من المدخرات. */
+  /* ---------- الدخل: ثابت أو لكل شهر، مع زيادة راتب اختيارية ---------- */
+  function baseIncomeAt(state, m) {
+    var fixed = state.salary + state.other;
+    if (state.varIncome) {
+      var v = +(state.incomeMonths || [])[m];
+      return isNaN(v) ? fixed : Math.max(0, v);
+    }
+    return fixed;
+  }
+  function incomeAt(state, m) {
+    var base = baseIncomeAt(state, m), rz = state.raise;
+    if (rz && +rz.pct > 0 && m >= (rz.month | 0)) base *= 1 + rz.pct / 100;
+    return base;
+  }
+
+  /* ---------- المحاكاة ----------
+     p: gEx تغيير المصروفات المتغيرة %، gOb تغيير الالتزامات %، goal هدف الادخار،
+        incExtra دخل إضافي شهري، extraDebt دفعة إضافية للدين الأعلى فائدة،
+        shock (اختياري): lossPct, lossStart, lossMonths, emAmount, emMonth.
+     الدين يحمل فائدة شهرية. الادخار = الأقل من الهدف والفائض. ما يزيد فائض حر. والعجز يُسحب من المدخرات. */
   function runSim(state, p) {
-    var t = totals(state, p.gEx, p.gOb), r = state.ret / 1200, bal = state.start;
+    var r = state.ret / 1200, bal = state.start, sh = p.shock;
     var debts = state.debts.map(function (d) { return { name: d.name, b: d.balance, r: d.rate / 1200, p: d.payment, rate: d.rate }; });
     var order = debts.map(function (_, i) { return i; }).sort(function (x, y) { return (debts[y].rate - debts[x].rate) || (debts[x].b - debts[y].b); });
     var rows = [];
     for (var m = 0; m < 12; m++) {
-      var inc = incomeAt(state, m) + (p.incExtra || 0), debtPay = 0, parts = [];
+      var inc = incomeAt(state, m) + (p.incExtra || 0);
+      if (sh && sh.lossPct > 0 && m >= sh.lossStart && m < sh.lossStart + sh.lossMonths) inc *= 1 - sh.lossPct / 100;
+      var mt = monthTotals(state, m, p.gEx, p.gOb);
+      var exp = mt.ob + mt.ex + (sh && sh.emAmount > 0 && m === sh.emMonth ? sh.emAmount : 0);
+      var debtPay = 0, parts = [];
       debts.forEach(function (d) {
         d.b += d.b * d.r;
         var pay = Math.min(d.p, d.b);
@@ -73,7 +119,7 @@
         var q = Math.min(left, debts[order[k]].b);
         if (q > 0) { debts[order[k]].b -= q; left -= q; debtPay += q; }
       }
-      var exp = t.ob + t.ex, surplus = inc - exp - debtPay;
+      var surplus = inc - exp - debtPay;
       var contrib = surplus > 0 ? Math.min(p.goal, surplus) : 0;
       var free = surplus > 0 ? surplus - contrib : 0;
       var draw = surplus < 0 ? surplus : 0;
@@ -134,24 +180,100 @@
     return { months: months, interest: interest, never: b.some(function (x) { return x > 0.5; }) };
   }
 
+  /* ---------- اختبار الصدمة: فقدان دخل ومصروف طارئ ---------- */
+  function stress(state, a) {
+    var s = state.shock;
+    if (!s || !s.on) return null;
+    var sh = { lossPct: clamp(s.lossPct, 0, 100), lossStart: clamp(s.lossStart, 0, 11) | 0, lossMonths: Math.max(1, clamp(s.lossMonths, 1, 12) | 0),
+      emAmount: Math.max(0, +s.emAmount || 0), emMonth: clamp(s.emMonth, 0, 11) | 0 };
+    var rows = runSim(state, { gEx: state.g, gOb: 0, goal: state.goal, incExtra: 0, extraDebt: 0, shock: sh });
+    var minIdx = 0, negIdx = -1, i;
+    for (i = 0; i < rows.length; i++) {
+      if (rows[i].bal < rows[minIdx].bal) minIdx = i;
+      if (negIdx < 0 && rows[i].bal < 0) negIdx = i;
+    }
+    return { rows: rows, sh: sh, minIdx: minIdx, minBal: rows[minIdx].bal, negIdx: negIdx, endBal: rows[11].bal, delta: rows[11].bal - a.rows[11].bal };
+  }
+
+  /* ---------- أهداف الادخار بتاريخ ---------- */
+  function goalReq(amount, n, retAnnual) {
+    var r = retAnnual / 1200;
+    return r > 0 ? amount * r / (Math.pow(1 + r, n) - 1) : amount / n;
+  }
+  function monthsFor(amount, pay, retAnnual) {
+    var r = retAnnual / 1200;
+    return r > 0 ? Math.ceil(Math.log(1 + amount * r / pay) / Math.log(1 + r)) : Math.ceil(amount / pay);
+  }
+  /* الأهداف تُرتَّب بالأقرب موعداً وتتقاسم الادخار الشهري. لا تُحسب منها المدخرات الحالية. */
+  function goalPlan(state, a) {
+    var list = (state.goals || []).filter(function (g) { return g.amount > 0 && g.months >= 1; })
+      .map(function (g) { return { id: g.id, name: g.name, amount: g.amount, months: Math.round(g.months) }; })
+      .sort(function (x, y) { return x.months - y.months; });
+    var cum = 0, cap = a.contrib;
+    list.forEach(function (g) {
+      var before = cum;
+      g.req = goalReq(g.amount, g.months, state.ret);
+      cum += g.req;
+      g.ok = cum <= cap + 0.5;
+      g.short = g.ok ? 0 : Math.min(g.req, cum - cap);
+      var avail = Math.max(0, cap - before);
+      g.ext = g.ok ? null : (avail > 0.5 ? monthsFor(g.amount, avail, state.ret) : null);
+      g.date = monthYear(g.months - 1);
+    });
+    return { list: list, total: cum, cap: cap, byId: list.reduce(function (o, g) { o[g.id] = g; return o; }, {}) };
+  }
+
+  /* ---------- الفعلي مقابل المخطط ---------- */
+  function monthKey(offset) {
+    var d = new Date(), t = d.getFullYear() * 12 + d.getMonth() + offset, y = Math.floor(t / 12), m = t % 12;
+    return { key: y + '-' + (m < 9 ? '0' : '') + (m + 1), label: MONTHS[m] + ' ' + digits(y), offset: offset };
+  }
+  function actualKeys() {
+    var out = []; for (var o = -5; o <= 0; o++) out.push(monthKey(o)); return out;
+  }
+  function actualsSummary(state, a) {
+    var planned = a.ob + a.ex, sumA = 0, sumP = 0, n = 0;
+    var entries = actualKeys().map(function (k) {
+      var v = state.actuals && state.actuals[k.key];
+      var has = v !== undefined && v !== null && v !== '' && !isNaN(+v);
+      var e = { key: k.key, label: k.label, planned: planned, actual: has ? +v : null, diff: null, pct: null };
+      if (has) { e.diff = +v - planned; e.pct = planned > 0 ? e.diff / planned * 100 : 0; sumA += +v; sumP += planned; n++; }
+      return e;
+    });
+    return { entries: entries, count: n, totalDiff: sumA - sumP, avgDiff: n ? (sumA - sumP) / n : 0, avgPct: sumP > 0 ? (sumA - sumP) / sumP * 100 : 0, planned: planned };
+  }
+
+  /* ---------- CSV ---------- */
+  function csv(rows) {
+    return rows.map(function (r) {
+      return r.map(function (c) {
+        var s = String(c === null || c === undefined ? '' : c);
+        return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+      }).join(',');
+    }).join('\r\n');
+  }
+
+  /* ---------- التحليل الرئيسي ---------- */
   function analyze(state) {
     var g = state.g, t = totals(state, g, 0);
     var rows = runSim(state, { gEx: g, gOb: 0, goal: state.goal, incExtra: 0, extraDebt: 0 });
     var baseRows = g === 0 ? rows : simulate(state, 0, state.goal);
-    var vi = !!state.varIncome;
     function avg(f) { return rows.reduce(function (s, r) { return s + f(r); }, 0) / rows.length; }
-    function pick(f) { return vi ? avg(f) : f(rows[0]); }
-    var inc = pick(function (r) { return r.income; }), debtPay = pick(function (r) { return r.debtPay; });
-    var contrib = pick(function (r) { return r.contrib; }), free = pick(function (r) { return r.free; });
+    var inc = avg(function (r) { return r.income; }), debtPay = avg(function (r) { return r.debtPay; });
+    var contrib = avg(function (r) { return r.contrib; }), free = avg(function (r) { return r.free; });
     var outflow = t.ob + t.ex + debtPay, surplus = inc - outflow;
     var incs = rows.map(function (r) { return r.income; });
-    return {
-      varIncome: vi, inc: inc, incMin: Math.min.apply(null, incs), incMax: Math.max.apply(null, incs),
+    var varies = !!state.varIncome || (state.raise && +state.raise.pct > 0) || (+state.inflation || 0) > 0 ||
+      state.items.some(function (it) { return it.sched === 'y' || it.sched === 'o'; });
+    var res = {
+      varIncome: !!state.varIncome, varies: !!varies, inc: inc, incMin: Math.min.apply(null, incs), incMax: Math.max.apply(null, incs),
       ob: t.ob, ex: t.ex, debtPay: debtPay, outflow: outflow, surplus: surplus,
       contrib: contrib, free: free, rate: inc > 0 ? contrib / inc * 100 : 0,
       dti: inc > 0 ? debtPay / inc : 0, cover: outflow > 0 ? state.start / outflow : Infinity,
       rows: rows, baseRows: baseRows, target: targetPath(state)
     };
+    res.stress = stress(state, res);
+    return res;
   }
 
   /* ---------- مقارنة السيناريوهات ---------- */
@@ -184,16 +306,16 @@
   function advice(a, state) {
     var alerts = [], recs = [], goal = state.goal, i;
     var debtsLive = state.debts.filter(function (d) { return d.balance > 0.5; });
-    var avgNote = a.varIncome ? ' في المتوسط' : '';
+    var avgNote = a.varies ? ' في المتوسط' : '';
+    var gp = goalPlan(state, a), act = actualsSummary(state, a);
 
     // التنبيهات
     if (a.surplus < 0) {
       alerts.push({ level: 'bad', title: 'عجز شهري', text: 'مصروفاتك وأقساطك تزيد عن دخلك بمقدار ' + money(-a.surplus) + avgNote + '.' + (goal > 0 ? ' لا يمكن تحقيق هدف الادخار في هذه الحالة.' : '') });
-    } else if (a.varIncome && goal > 0 && goal > a.contrib + 0.5) {
-      alerts.push({ level: 'warn', title: 'هدف الادخار لا يتحقق في كل الأشهر',
+    } else if (goal > 0 && goal > a.contrib + 0.5) {
+      if (a.varies) alerts.push({ level: 'warn', title: 'هدف الادخار لا يتحقق في كل الأشهر',
         text: 'الهدف ' + money(goal) + ' شهرياً، لكن المحاكاة تدخر ' + money(a.contrib) + ' في المتوسط لأن الفائض في بعض الأشهر أقل من الهدف.' });
-    } else if (!a.varIncome && goal > 0 && goal > a.surplus + 0.5) {
-      alerts.push({ level: 'warn', title: 'هدف الادخار أكبر من الفائض المتاح',
+      else alerts.push({ level: 'warn', title: 'هدف الادخار أكبر من الفائض المتاح',
         text: 'الهدف ' + money(goal) + ' والمتاح ' + money(a.surplus) + '. تدخر المحاكاة ' + money(a.contrib) + ' فقط، وينقصك ' + money(goal - a.surplus) + ' شهرياً.' });
     }
     var defMonths = [];
@@ -211,6 +333,17 @@
       if (d.payment <= d.balance * d.rate / 1200 + 0.5) alerts.push({ level: 'bad', title: 'قسط لا يغطي الفائدة', text: 'قسط ' + esc(d.name || 'دين بلا اسم') + ' لا يغطي فائدته الشهرية، فلا ينقص الدين.' });
     });
     if (isFinite(a.cover) && a.cover < 1) alerts.push({ level: 'warn', title: 'احتياطي الطوارئ ضعيف', text: 'مدخراتك الحالية تغطي أقل من شهر واحد من الإنفاق والأقساط.' });
+    var shortGoals = gp.list.filter(function (g) { return !g.ok; });
+    if (shortGoals.length) {
+      alerts.push({ level: 'warn', title: 'هدف بتاريخ لا يتحقق بالادخار الحالي',
+        text: shortGoals.map(function (g) { return esc(g.name || 'هدف بلا اسم'); }).join('، ') + ': تحتاج الأهداف ' + money(gp.total) + ' شهرياً والمتاح للادخار ' + money(gp.cap) + '.' });
+    }
+    if (a.stress && a.stress.negIdx >= 0) {
+      alerts.push({ level: 'bad', title: 'الصدمة المفترضة تستنزف مدخراتك', text: 'في اختبار الصدمة ينفد رصيدك في شهر ' + monthLabel(a.stress.negIdx) + '.' });
+    }
+    if (act.count >= 2 && act.avgPct > 10) {
+      alerts.push({ level: 'warn', title: 'إنفاقك الفعلي يتجاوز الخطة', text: 'في ' + fmtMonths(act.count) + ' مسجلة تجاوزت الخطة بنسبة ' + pct(act.avgPct) + ' (' + money(act.avgDiff) + ' شهرياً).' });
+    }
     if (debtsLive.length && a.rows[11].debtLeft < 0.5) {
       for (i = 0; i < a.rows.length; i++) if (a.rows[i].debtLeft < 0.5) break;
       alerts.push({ level: 'good', title: 'ديونك تنتهي خلال السنة', text: 'تُسدَّد كل الديون في شهر ' + monthLabel(i) + '.' });
@@ -227,15 +360,32 @@
         body: p <= 100 ? 'خفض المصروفات المتغيرة بنسبة ' + pct(Math.ceil(p)) + ' يسدّ الفجوة بين دخلك وإنفاقك.'
           : 'حتى إلغاء كل المصروفات المتغيرة لا يسدّ الفجوة. راجع الدخل أو اطلب إعادة جدولة الأقساط.',
         impact: 'الفجوة ' + money(need) + ' شهرياً' + avgNote });
-    } else if (a.varIncome && goal > 0 && goal > a.contrib + 0.5) {
-      recs.push({ pri: 'important', title: 'اضبط هدف الادخار على أضعف الأشهر',
+    } else if (goal > 0 && goal > a.contrib + 0.5) {
+      var need2 = goal - a.contrib, p2 = ex > 0 ? need2 / ex * 100 : Infinity;
+      if (a.varies) recs.push({ pri: 'important', title: 'اضبط هدف الادخار على أضعف الأشهر',
         body: 'هدفك ' + money(goal) + ' لا يتحقق في كل الأشهر، ومتوسط ما تدخره فعلياً ' + money(a.contrib) + '. اخفض الهدف إلى مستوى تغطيه الأشهر الضعيفة، أو اخفض المصروفات المتغيرة لرفع الفائض.',
-        impact: 'متوسط الفجوة ' + money(goal - a.contrib) + ' شهرياً' });
-    } else if (!a.varIncome && goal > 0 && goal > a.surplus + 0.5) {
-      var need2 = goal - a.surplus, p2 = ex > 0 ? need2 / ex * 100 : Infinity;
-      recs.push({ pri: 'important', title: 'اضبط هدف الادخار على الفائض',
+        impact: 'متوسط الفجوة ' + money(need2) + ' شهرياً' });
+      else recs.push({ pri: 'important', title: 'اضبط هدف الادخار على الفائض',
         body: 'هدفك ' + money(goal) + ' أعلى من الفائض ' + money(a.surplus) + '. اخفض الهدف إلى ' + money(a.surplus) + (p2 <= 100 ? '، أو اخفض المصروفات المتغيرة بنسبة ' + pct(Math.ceil(p2)) + ' لتحقق الهدف كاملاً.' : '.'),
         impact: 'الفرق ' + money(need2) + ' شهرياً' });
+    }
+
+    if (shortGoals.length) {
+      var g0 = shortGoals[0];
+      recs.push({ pri: 'important', title: 'أهدافك بتاريخ تحتاج ادخاراً أكبر',
+        body: 'تحتاج أهدافك ' + money(gp.total) + ' شهرياً لتتحقق في مواعيدها، والمتاح ' + money(gp.cap) + '. ارفع الادخار بمقدار ' + money(Math.max(gp.total - gp.cap, 0)) +
+          (g0.ext ? '، أو مدّد موعد «' + esc(g0.name || 'الهدف') + '» إلى ' + fmtMonths(g0.ext) + '.' : '، أو أجّل هدفاً منها.'),
+        impact: 'الفجوة ' + money(Math.max(gp.total - gp.cap, 0)) + ' شهرياً' });
+    }
+
+    if (a.stress) {
+      var st = a.stress;
+      if (st.negIdx >= 0) recs.push({ pri: 'important', title: 'ابنِ حاجزاً ضد الصدمة',
+        body: 'في الصدمة المفترضة ينفد رصيدك في شهر ' + monthLabel(st.negIdx) + ' ويصل أدنى رصيد إلى ' + money(st.minBal) + '. لتصمد تحتاج مدخرات إضافية بهذا المقدار قبل وقوعها.',
+        impact: 'المطلوب ' + money(-st.minBal) });
+      else recs.push({ pri: 'improve', title: 'تتحمل الصدمة المفترضة',
+        body: 'أدنى رصيد يصله حسابك في الصدمة ' + money(st.minBal) + ' في شهر ' + monthLabel(st.minIdx) + '، وينتهي العام عند ' + money(st.endBal) + '. جرّب صدمة أقسى لتعرف حدّك.',
+        impact: 'الأثر على رصيد نهاية السنة ' + money(st.delta) });
     }
 
     if (a.varIncome && a.incMax > a.incMin * 1.1) {
@@ -247,6 +397,16 @@
         impact: 'العجز المتراكم ' + money(buf) });
       else recs.push({ pri: 'improve', title: 'ادّخر في الأشهر القوية',
         body: range + 'ويغطي إنفاقك حتى في أضعف شهر. ضع جزءاً ثابتاً من الأشهر القوية في حساب منفصل لتثبيت مستوى معيشتك.', impact: '' });
+    }
+
+    if (act.count >= 2 && act.avgPct > 10) {
+      recs.push({ pri: 'important', title: 'راجع الفرق بين الخطة والفعلي',
+        body: 'إنفاقك الفعلي يزيد عن الخطة بنسبة ' + pct(act.avgPct) + '. إما أن الخطة أقل من واقعك فعدّل بنودها، أو أن هناك إنفاقاً غير مخطط فسجّله كبند.',
+        impact: 'المتوسط ' + money(act.avgDiff) + ' فوق الخطة شهرياً' });
+    } else if (act.count >= 2 && act.avgPct < -10) {
+      recs.push({ pri: 'improve', title: 'وجّه ما وفّرته إلى الادخار',
+        body: 'أنفقت أقل من الخطة بنسبة ' + pct(-act.avgPct) + '. حوّل الفرق إلى حساب الادخار أو إلى الدين قبل أن يُصرف.',
+        impact: 'المتوسط ' + money(-act.avgDiff) + ' شهرياً' });
     }
 
     if (debtsLive.length) {
@@ -286,10 +446,25 @@
         impact: 'الحد الآمن ' + money(a.inc * 0.36) + ' شهرياً' });
     }
 
-    var vars = state.items.filter(function (it) { return it.kind === 'ex' && effAmount(it, state.g) > 0; })
-      .sort(function (x, y) { return effAmount(y, state.g) - effAmount(x, state.g); }).slice(0, 2);
+    if (state.raise && +state.raise.pct > 0) {
+      var rg = 0; for (var mm = 0; mm < 12; mm++) rg += baseIncomeAt(state, mm); rg = rg / 12 * (+state.raise.pct / 100);
+      recs.push({ pri: 'improve', title: 'لا تدع الزيادة تُصرف',
+        body: 'زيادة الدخل المتوقعة ' + pct(+state.raise.pct) + ' بدءاً من شهر ' + monthLabel(state.raise.month | 0) + ' تضيف نحو ' + money(rg) + ' شهرياً. وجّه نصفها على الأقل إلى الادخار أو الدين قبل أن يعتاد إنفاقك عليها.',
+        impact: money(rg / 2) + ' شهرياً مقترح' });
+    }
+
+    if ((+state.inflation || 0) > 0 && a.outflow > 0) {
+      var avgF = 0; for (var q2 = 0; q2 < 12; q2++) avgF += inflF(state, q2); avgF /= 12;
+      var rise = (a.ob + a.ex) / avgF * (inflF(state, 11) - 1);
+      recs.push({ pri: 'improve', title: 'التضخم يرفع إنفاقك خلال السنة',
+        body: 'بنسبة تضخم ' + pct(+state.inflation) + ' سنوياً يرتفع إنفاقك الشهري بنحو ' + money(rise) + ' بنهاية الأشهر الاثني عشر. ثبّت الأسعار حيث تستطيع (اشتراكات، عقود) وراجع الدخل.',
+        impact: '' });
+    }
+
+    var vars = state.items.filter(function (it) { return it.kind === 'ex' && itemAvg(state, it, state.g, 0) > 0; })
+      .sort(function (x, y) { return itemAvg(state, y, state.g, 0) - itemAvg(state, x, state.g, 0); }).slice(0, 2);
     if (vars.length) {
-      var gain = vars.reduce(function (s, it) { return s + effAmount(it, state.g) * 0.1; }, 0);
+      var gain = vars.reduce(function (s, it) { return s + itemAvg(state, it, state.g, 0) * 0.1; }, 0);
       var names = vars.map(function (it) { return esc(it.name || 'بدون اسم'); }).join(' و');
       recs.push({ pri: 'improve', title: 'اقتطع من أكبر بندين متغيرين',
         body: 'أكبر بنود المصروفات المتغيرة هي ' + names + '. خفض ' + (vars.length > 1 ? 'كل منهما' : 'البند') + ' بنسبة ' + pct(10) + ' يوفر ' + money(gain) + ' شهرياً.',
@@ -317,14 +492,17 @@
 
     var order = { urgent: 0, important: 1, improve: 2 };
     recs = recs.map(function (r, idx) { r._i = idx; return r; })
-      .sort(function (x, y) { return (order[x.pri] - order[y.pri]) || (x._i - y._i); }).slice(0, 8);
+      .sort(function (x, y) { return (order[x.pri] - order[y.pri]) || (x._i - y._i); }).slice(0, 10);
 
     return { alerts: alerts, recs: recs };
   }
 
-  var api = { MONTHS: MONTHS, esc: esc, fmt: fmt, num: num, money: money, pct: pct, fmtMonths: fmtMonths, monthLabel: monthLabel, monthYear: monthYear,
-    effAmount: effAmount, totals: totals, incomeAt: incomeAt, runSim: runSim, simulate: simulate, targetPath: targetPath, debtMonths: debtMonths,
-    payoff: payoff, analyze: analyze, scenarioMetrics: scenarioMetrics, compare: compare, advice: advice };
+  var api = { MONTHS: MONTHS, setDigits: setDigits, getDigits: getDigits, digits: digits, esc: esc, fmt: fmt, fmtPlain: fmtPlain, num: num, money: money, pct: pct,
+    fmtMonths: fmtMonths, monthLabel: monthLabel, monthYear: monthYear, clamp: clamp,
+    itemBase: itemBase, itemAt: itemAt, itemAvg: itemAvg, monthTotals: monthTotals, totals: totals, baseIncomeAt: baseIncomeAt, incomeAt: incomeAt,
+    runSim: runSim, simulate: simulate, targetPath: targetPath, debtMonths: debtMonths, payoff: payoff, stress: stress,
+    goalReq: goalReq, goalPlan: goalPlan, monthKey: monthKey, actualKeys: actualKeys, actualsSummary: actualsSummary, csv: csv,
+    analyze: analyze, scenarioMetrics: scenarioMetrics, compare: compare, advice: advice };
   root.BudgetModel = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
