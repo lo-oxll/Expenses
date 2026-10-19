@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>مختبر الميزانية الشخصية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Reem+Kufi:wght@500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap" dir="rtl" lang="ar">
+  <header class="top">
+    <div>
+      <h1>مختبر الميزانية الشخصية</h1>
+      <p>أدخل الراتب والمصروفات والديون وهدف الادخار، وشاهد كيف يتغير رصيدك المتوقع عند تعديل الإنفاق.</p>
+    </div>
+    <div class="tools">
+      <span class="tag">أرقام تجريبية بالدينار العراقي</span>
+      <button class="btn" id="reset" type="button">إعادة الأرقام التجريبية</button>
+    </div>
+  </header>
+
+  <section class="hero" aria-label="الرصيد المتوقع">
+    <div class="hero-grid">
+      <div>
+        <div class="eyebrow">رصيد مدخراتك بعد 12 شهراً</div>
+        <div class="big" id="hero-bal" aria-live="polite"></div>
+        <div class="delta" id="hero-delta"></div>
+        <div class="pillrow">
+          <span class="pill" id="pill"><i></i><span id="pill-t"></span></span>
+          <span class="note" id="hero-note"></span>
+        </div>
+      </div>
+      <div class="what">
+        <label for="gs">ماذا لو غيّرت المصروفات المتغيرة؟</label>
+        <p class="hint">يؤثر المؤشر على بنود المصروفات المتغيرة فقط. الالتزامات والأقساط تبقى كما هي.</p>
+        <div class="gval" id="gval"></div>
+        <input type="range" id="gs" min="-40" max="40" step="5" value="0">
+        <div class="ticks"><span>تقليص 40%</span><span>بلا تعديل</span><span>زيادة 40%</span></div>
+      </div>
+    </div>
+    <div class="tiles">
+      <div class="tile"><span id="t-inc-l">الدخل الشهري</span><b id="t-inc"></b></div>
+      <div class="tile"><span>الالتزامات والمصروفات</span><b id="t-exp"></b></div>
+      <div class="tile"><span>سداد الديون</span><b id="t-debt"></b></div>
+      <div class="tile"><span>الفائض المتاح</span><b id="t-sur"></b></div>
+    </div>
+  </section>
+
+  <ul class="alerts" id="alerts" aria-live="polite" aria-label="التنبيهات"></ul>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel" aria-labelledby="h-inc">
+        <h2 id="h-inc">الدخل والادخار</h2>
+        <div class="fields">
+          <div class="field"><label for="salary">الراتب الشهري</label><div class="withunit"><input class="inp" id="salary" type="number" min="0" step="10000" inputmode="numeric"><span class="u">د.ع</span></div></div>
+          <div class="field"><label for="other">دخل إضافي شهري</label><div class="withunit"><input class="inp" id="other" type="number" min="0" step="10000" inputmode="numeric"><span class="u">د.ع</span></div></div>
+          <div class="field"><label for="start">المدخرات الحالية</label><div class="withunit"><input class="inp" id="start" type="number" min="0" step="50000" inputmode="numeric"><span class="u">د.ع</span></div></div>
+          <div class="field"><label for="goal">هدف الادخار الشهري</label><div class="withunit"><input class="inp" id="goal" type="number" min="0" step="10000" inputmode="numeric"><span class="u">د.ع</span></div></div>
+          <div class="field"><label for="ret">عائد سنوي على المدخرات</label><div class="withunit"><input class="inp" id="ret" type="number" min="0" max="30" step="0.5" inputmode="decimal"><span class="u">%</span></div></div>
+        </div>
+        <div class="varinc">
+          <label class="check"><input type="checkbox" id="varinc"><span>دخل متغير: أدخل الدخل لكل شهر</span></label>
+          <div id="inc-box" hidden>
+            <p class="sub">يحل هذا الجدول محل الراتب والدخل الإضافي في المحاكاة. مفيد للعمولات والعمل الحر.</p>
+            <div class="months" id="inc-months"></div>
+            <div class="months-tools">
+              <button class="btn" id="inc-fill" type="button">تعبئة كل الأشهر بالراتب والدخل الإضافي</button>
+              <span class="share" id="inc-stat"></span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-ob">
+        <h2 id="h-ob">الالتزامات الثابتة <small id="sub-ob"></small></h2>
+        <p class="sub">إيجار وفواتير شهرية لا تتغير من شهر لآخر.</p>
+        <div class="rows" id="list-ob"></div>
+        <button class="btn add" id="add-ob" type="button">+ إضافة التزام</button>
+      </section>
+
+      <section class="panel" aria-labelledby="h-ex">
+        <h2 id="h-ex">المصروفات المتغيرة <small id="sub-ex"></small></h2>
+        <p class="sub">حرّك شريط كل بند من صفر إلى ضعف المبلغ الأصلي.</p>
+        <div class="rows" id="list-ex"></div>
+        <button class="btn add" id="add-ex" type="button">+ إضافة مصروف</button>
+      </section>
+
+      <section class="panel" aria-labelledby="h-db">
+        <h2 id="h-db">سداد الديون <small id="sub-db"></small></h2>
+        <p class="sub">لكل دين الرصيد المتبقي والفائدة السنوية والقسط الشهري. اكتب 0 للفائدة إن لم تكن هناك فائدة.</p>
+        <div class="rows" id="list-db"></div>
+        <button class="btn add" id="add-db" type="button">+ إضافة دين</button>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel" aria-labelledby="h-al">
+        <h2 id="h-al">كيف يتوزع الدخل <small id="al-note">الشهر الأول</small></h2>
+        <div class="alloc" role="img" aria-label="توزيع الدخل بين الالتزامات والمصروفات والديون والادخار والفائض الحر">
+          <div class="a1" id="seg-ob"></div><div class="a2" id="seg-ex"></div><div class="a3" id="seg-db"></div><div class="a4" id="seg-sv"></div><div class="a5" id="seg-fr"></div>
+        </div>
+        <div class="alloc-key">
+          <span><i style="background:var(--c1)"></i>التزامات <b id="al-ob"></b></span>
+          <span><i style="background:var(--c2)"></i>مصروفات <b id="al-ex"></b></span>
+          <span><i style="background:var(--c4)"></i>ديون <b id="al-db"></b></span>
+          <span><i style="background:var(--good)"></i>ادخار <b id="al-sv"></b></span>
+          <span><i style="background:var(--free)"></i>فائض حر <b id="al-fr"></b></span>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="h-dn">
+        <h2 id="h-dn">توزيع النفقات <small>يتحدث فوراً</small></h2>
+        <div class="chartbox"><canvas id="donut" aria-label="رسم دائري لتوزيع النفقات" role="img"></canvas>
+          <div class="center"><span>إجمالي الخارج</span><b id="donut-total"></b></div></div>
+        <ul class="legend" id="legend"></ul>
+      </section>
+
+      <section class="panel" aria-labelledby="h-ln">
+        <h2 id="h-ln">محاكاة رصيد الادخار <small>12 شهراً</small></h2>
+        <div class="chartbox tall"><canvas id="line" aria-label="رسم خطي لرصيد المدخرات خلال 12 شهراً" role="img"></canvas></div>
+        <div class="lkey">
+          <span><i></i>المتوقع</span>
+          <span id="lk-base"><i class="dash"></i>بلا تعديل</span>
+          <span id="lk-target"><i class="dot"></i>مسار الهدف</span>
+        </div>
+        <div class="fallback" id="fallback" hidden>تعذر تحميل مكتبة الرسوم البيانية. الأرقام والجدول يعملان بشكل طبيعي.</div>
+      </section>
+    </div>
+  </div>
+
+  <section class="panel full" aria-labelledby="h-sc">
+    <h2 id="h-sc">مقارنة السيناريوهات <small>الوضع الحالي مقابل خططك</small></h2>
+    <p class="sub">يبدأ كل سيناريو من أرقامك نفسها ثم يطبّق التعديلات التي تحددها هنا، حتى ثلاثة سيناريوهات. مؤشر «ماذا لو» في أعلى الصفحة لا يؤثر على هذه المقارنة.</p>
+    <div class="scn-cards" id="scn-cards"></div>
+    <button class="btn add" id="add-scn" type="button">+ إضافة سيناريو</button>
+    <div class="chartbox tall sc-chart"><canvas id="scline" aria-label="رسم خطي يقارن رصيد المدخرات في السيناريوهات" role="img"></canvas></div>
+    <div class="lkey" id="sc-legend"></div>
+    <div class="fallback" id="sc-fallback" hidden>تعذر تحميل مكتبة الرسوم البيانية. جدول المقارنة يعمل بشكل طبيعي.</div>
+    <div class="tablewrap sc-table" tabindex="0" role="region" aria-label="جدول مقارنة السيناريوهات">
+      <table class="cmp"><thead id="cmp-head"></thead><tbody id="cmp-body"></tbody></table>
+    </div>
+  </section>
+
+  <section class="panel full" aria-labelledby="h-tb">
+    <h2 id="h-tb">الجدول الشهري <small>المبالغ بالدينار العراقي</small></h2>
+    <div class="tablewrap" tabindex="0" role="region" aria-label="جدول المحاكاة الشهرية">
+      <table>
+        <thead><tr><th>الشهر</th><th>الدخل</th><th>المصروفات</th><th>الأقساط</th><th>الادخار</th><th>فائض حر</th><th>رصيد المدخرات</th><th>الدين المتبقي</th></tr></thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+    <div class="tabletools"><button class="btn" id="copy" type="button">نسخ الجدول</button><span id="copy-msg" role="status"></span></div>
+  </section>
+
+  <section class="panel full" aria-labelledby="h-rc">
+    <h2 id="h-rc">توصيات الخطة <small>مرتبة بالأولوية</small></h2>
+    <div class="recs" id="recs"></div>
+  </section>
+
+  <footer class="foot"><span>HTML / CSS / JS / Chart.js</span><span>كل الحسابات تتم داخل متصفحك. لا تُرسل أي بيانات، ولا تُطلب بيانات مصرفية. تُحفظ أرقامك في هذا المتصفح فقط.</span></footer>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="model.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

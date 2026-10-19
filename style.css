@@ -1,0 +1,213 @@
+/* التخطيط: بطاقة النتيجة مع مؤشر "ماذا لو" في الأعلى، ثم التنبيهات، ثم الإدخالات (جهة البداية) بجانب الرسوم (جهة النهاية)، ثم الجدول الشهري والتوصيات بعرض كامل. على الهاتف تتراص كلها في عمود واحد. */
+:root{
+  --bg:#EDF0F1; --surface:#FAFBFB; --raise:#F1F4F5; --ink:#13242B; --muted:#546870; --line:#CDD7DA;
+  --accent:#0E7C86; --accent-ink:#0A5F67; --accent-soft:#D9EEF0; --on-accent:#FFFFFF; --grid:rgba(14,124,134,.13);
+  --good:#1E8A4C; --warn:#A8690F; --bad:#C0392B; --free:#B4C3C8;
+  --c1:#0E7C86; --c2:#D08A2E; --c3:#5A6CB8; --c4:#B8507F; --c5:#6B9B3D; --c6:#8E5BB5; --c7:#2F8FD0; --c8:#A8714A;
+  --font-display:'Reem Kufi','IBM Plex Sans Arabic',Tahoma,sans-serif;
+  --font-body:'IBM Plex Sans Arabic',Tahoma,'Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1A1F; --surface:#15262D; --raise:#1B3039; --ink:#E4EEF0; --muted:#93A8AF; --line:#2A424B;
+    --accent:#46C1CC; --accent-ink:#7FD6DE; --accent-soft:#12363D; --on-accent:#06171A; --grid:rgba(70,193,204,.11);
+    --good:#4CC38A; --warn:#E0A84A; --bad:#F0786B; --free:#3B5660;
+    --c1:#46C1CC; --c2:#E5A957; --c3:#8D9CE0; --c4:#E084AB; --c5:#9CCB6B; --c6:#BC92DE; --c7:#6DB8EC; --c8:#D09B77;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1A1F; --surface:#15262D; --raise:#1B3039; --ink:#E4EEF0; --muted:#93A8AF; --line:#2A424B;
+  --accent:#46C1CC; --accent-ink:#7FD6DE; --accent-soft:#12363D; --on-accent:#06171A; --grid:rgba(70,193,204,.11);
+  --good:#4CC38A; --warn:#E0A84A; --bad:#F0786B; --free:#3B5660;
+  --c1:#46C1CC; --c2:#E5A957; --c3:#8D9CE0; --c4:#E084AB; --c5:#9CCB6B; --c6:#BC92DE; --c7:#6DB8EC; --c8:#D09B77;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.6}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.num{unicode-bidi:isolate;direction:ltr;display:inline-block;font-variant-numeric:tabular-nums}
+.unit{color:var(--muted);font-size:.8em}
+h1,h2,h3{margin:0;font-weight:600;text-wrap:balance}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* الرأس */
+.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;margin-bottom:18px}
+.top h1{font-family:var(--font-display);font-size:clamp(1.7rem,5vw,2.4rem);font-weight:700;line-height:1.2}
+.top p{margin:6px 0 0;color:var(--muted);max-width:60ch}
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.tag{font-size:.8rem;color:var(--accent-ink);background:var(--accent-soft);padding:4px 10px;border-radius:999px;font-weight:500}
+.btn{font:inherit;font-size:.85rem;font-weight:500;color:var(--ink);background:var(--surface);border:1px solid var(--line);padding:6px 14px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.add{width:100%;border-style:dashed;color:var(--accent-ink);margin-top:10px;padding:8px 14px}
+
+/* البطاقة العليا */
+.hero{border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px;background-color:var(--accent-soft);
+  background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:22px 32px;align-items:center}
+.eyebrow{font-size:.85rem;color:var(--accent-ink);font-weight:600;letter-spacing:.02em}
+.big{font-family:var(--font-display);font-size:clamp(2.3rem,8vw,3.7rem);font-weight:700;line-height:1.15;margin:4px 0;color:var(--ink)}
+.big .unit{font-size:.38em;font-family:var(--font-body)}
+.big.neg{color:var(--bad)}
+.delta{font-size:.9rem;color:var(--ink);min-height:1.5em}
+.pillrow{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:10px}
+.pill{display:inline-flex;align-items:center;gap:7px;font-size:.85rem;font-weight:600;padding:3px 12px;border-radius:999px;background:var(--surface);border:1px solid var(--line)}
+.pill i{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.pill.good i{background:var(--good)} .pill.ok i{background:var(--accent)} .pill.warn i{background:var(--warn)} .pill.bad i{background:var(--bad)}
+.note{font-size:.9rem;color:var(--ink)}
+.what{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.what label{display:block;font-weight:600;margin-bottom:2px}
+.what .hint{font-size:.82rem;color:var(--muted);margin:0 0 12px}
+.gval{font-weight:600;color:var(--accent-ink);min-height:1.5em;margin-bottom:6px}
+input[type=range]{width:100%;accent-color:var(--accent);margin:0;cursor:pointer}
+.ticks{display:flex;justify-content:space-between;font-size:.75rem;color:var(--muted);margin-top:4px}
+.tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-top:20px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;min-width:0}
+.tile span{display:block;font-size:.8rem;color:var(--muted)}
+.tile b{display:block;font-size:1.15rem;font-weight:600;overflow-wrap:anywhere}
+.tile b.neg{color:var(--bad)}
+
+/* التنبيهات */
+.alerts{list-style:none;margin:0 0 20px;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.al{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.al i{width:10px;height:10px;border-radius:50%;margin-top:.55em;background:var(--muted)}
+.al.bad{border-color:var(--bad)} .al.bad i{background:var(--bad)}
+.al.warn{border-color:var(--warn)} .al.warn i{background:var(--warn)}
+.al.good i{background:var(--good)}
+.al b{display:block;font-weight:600}
+.al span.t{display:block;font-size:.88rem;color:var(--muted)}
+
+/* الشبكة الرئيسية */
+.grid{display:grid;grid-template-columns:minmax(0,5fr) minmax(0,6fr);gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:20px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;min-width:0}
+.panel.full{margin-top:20px}
+.panel h2{font-size:1.05rem;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:4px 12px;margin-bottom:12px}
+.panel h2 small{font-size:.85rem;font-weight:500;color:var(--muted)}
+.panel .sub{font-size:.82rem;color:var(--muted);margin:-6px 0 12px}
+
+/* الحقول */
+.fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:.82rem;color:var(--muted)}
+.inp{font:inherit;color:var(--ink);background:var(--raise);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-width:0}
+.inp:focus{border-color:var(--accent)}
+input[type=number].inp{direction:ltr;text-align:end;font-variant-numeric:tabular-nums}
+.withunit{position:relative}
+.withunit .u{position:absolute;inset-block:0;inset-inline-start:10px;display:flex;align-items:center;font-size:.78rem;color:var(--muted);pointer-events:none}
+.withunit input{padding-inline-start:44px}
+
+/* البنود */
+.rows{display:flex;flex-direction:column;gap:10px}
+.row{border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--raise)}
+.row-main{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) auto;gap:8px;align-items:center}
+.row-main.dm{grid-template-columns:minmax(0,1fr) auto}
+.row-sub{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;margin-top:8px}
+.dfields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:8px}
+.dfields .field label{font-size:.75rem}
+.share{font-size:.78rem;color:var(--muted)}
+.row-sub .share{white-space:nowrap}
+.dfields + .share{margin-top:8px}
+.share.bad{color:var(--bad);font-weight:600}
+.del{font:inherit;font-size:1.1rem;line-height:1;width:32px;height:32px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--muted);cursor:pointer}
+.del:hover{color:var(--bad);border-color:var(--bad)}
+.empty{font-size:.88rem;color:var(--muted);padding:6px 2px}
+
+/* شريط التوزيع */
+.alloc{display:flex;height:16px;border-radius:8px;overflow:hidden;background:var(--raise);border:1px solid var(--line)}
+.alloc div{height:100%;transition:width .25s}
+.alloc .a1{background:var(--c1)} .alloc .a2{background:var(--c2)} .alloc .a3{background:var(--c4)} .alloc .a4{background:var(--good)} .alloc .a5{background:var(--free)}
+.alloc-key{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:10px;font-size:.84rem}
+.alloc-key span{display:inline-flex;align-items:center;gap:6px}
+.alloc-key i{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+/* الرسوم */
+.chartbox{position:relative;height:250px}
+.chartbox.tall{height:290px}
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none;text-align:center}
+.center span{font-size:.78rem;color:var(--muted)}
+.center b{font-size:1.05rem;font-weight:600}
+.legend{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.88rem}
+.legend li{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:4px 10px;align-items:center}
+.legend i{width:10px;height:10px;border-radius:3px;background:var(--sw)}
+.legend .n{overflow-wrap:anywhere}
+.legend .n small{color:var(--muted);font-size:.78rem}
+.legend .p{color:var(--muted);min-width:3.2em;text-align:end}
+.lkey{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:.84rem;margin-top:10px}
+.lkey span{display:inline-flex;align-items:center;gap:6px}
+.lkey i{display:inline-block;width:18px;height:0;border-top:3px solid var(--accent)}
+.lkey i.dash{border-top:2px dashed var(--muted)}
+.lkey i.dot{border-top:2px dotted var(--good)}
+.fallback{padding:14px;border:1px dashed var(--line);border-radius:8px;color:var(--muted);font-size:.88rem;margin-top:10px}
+
+/* الجدول الشهري */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:.88rem}
+th,td{padding:8px 12px;text-align:end;white-space:nowrap}
+th{font-weight:600;color:var(--muted);background:var(--raise);font-size:.8rem}
+th:first-child,td:first-child{text-align:start;position:sticky;inset-inline-start:0;background:var(--surface);z-index:1}
+th:first-child{background:var(--raise)}
+tbody tr + tr td{border-top:1px solid var(--line)}
+td.n{direction:ltr;font-variant-numeric:tabular-nums}
+td.neg{color:var(--bad)}
+tfoot td{font-weight:600;border-top:2px solid var(--line);background:var(--raise)}
+tfoot td:first-child{background:var(--raise)}
+.tabletools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px;font-size:.85rem;color:var(--muted)}
+
+/* التوصيات */
+.recs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.rec{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.rec h3{font-size:.98rem}
+.rec p{margin:0;font-size:.9rem;overflow-wrap:anywhere}
+.rec .impact{margin-top:auto;padding-top:6px;font-size:.84rem;font-weight:600;color:var(--accent-ink)}
+.rec .pri{align-self:flex-start;display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:600;color:var(--muted)}
+.rec .pri i{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.rec.urgent .pri i{background:var(--bad)} .rec.important .pri i{background:var(--warn)} .rec.improve .pri i{background:var(--accent)}
+.foot{margin-top:26px;font-size:.78rem;color:var(--muted);display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 18px}
+
+@media (max-width:900px){
+  .hero-grid{grid-template-columns:minmax(0,1fr)}
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .alerts,.recs{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:480px){
+  .fields{grid-template-columns:minmax(0,1fr)}
+  .dfields{grid-template-columns:minmax(0,1fr)}
+  .row-main{grid-template-columns:minmax(0,1fr) auto}
+  .row-main .nm{grid-column:1 / -1}
+  .hero{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){.alloc div{transition:none}}
+
+/* الدخل المتغير */
+.varinc{margin-top:16px;padding-top:14px;border-top:1px solid var(--line)}
+.check{display:flex;align-items:center;gap:10px;font-weight:500;cursor:pointer}
+.check input{width:18px;height:18px;accent-color:var(--accent);margin:0;cursor:pointer}
+.varinc .sub{margin:10px 0 12px}
+.months{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.months .field label{font-size:.75rem}
+.months-tools{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:12px}
+
+/* السيناريوهات */
+.scn-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,270px),1fr));gap:12px}
+.scn{background:var(--raise);border:1px solid var(--line);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.scn-h{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center}
+.scn-h .sw{width:12px;height:12px;border-radius:3px;background:var(--sw)}
+.scn-h b{font-weight:600}
+.scn-f label{display:flex;justify-content:space-between;gap:8px;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+.scn-f label b{color:var(--accent-ink);font-weight:600}
+.scn .fields{grid-template-columns:minmax(0,1fr)}
+.scn p{margin:0;font-size:.88rem;color:var(--muted)}
+.sc-chart{margin-top:18px}
+.lkey i.ln{display:inline-block;width:20px;height:0;border-top:3px solid var(--lc)}
+.lkey i.ln.dash{border-top-style:dashed}
+.sc-table{margin-top:14px}
+.cmp{min-width:520px}
+.cmp th:first-child,.cmp td:first-child{white-space:normal;min-width:150px}
+.cmp th .sw{display:inline-block;width:10px;height:10px;border-radius:3px;background:var(--sw);margin-inline-end:6px}
+.cmp td.c{vertical-align:top;font-variant-numeric:tabular-nums}
+.cmp td.c small{display:block;font-size:.75rem;font-weight:500}
+.diff.pos{color:var(--good)} .diff.neg{color:var(--bad)}
+@media (max-width:480px){ .months{grid-template-columns:repeat(2,minmax(0,1fr))} }
